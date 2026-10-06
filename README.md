@@ -1,1 +1,0 @@
-# lean_production_blockpraktikum
