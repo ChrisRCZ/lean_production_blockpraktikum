@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Station HMI">
+<meta name="color-scheme" content="dark light">
+<title>Station HMI</title>
+<style>
+:root {
+  --bg: #e6e9ed; --panel: #ffffff; --panel2: #f2f4f6; --line: #c9d0d7;
+  --text: #14181c; --muted: #5b6671; --accent: #0a62c9; --accent-ink: #ffffff;
+  --yes: #1b8a4b; --yes-ink: #ffffff; --bad: #cf2d24; --bad-ink: #ffffff;
+  --c-rot: #d3342b; --c-blau: #2a63d0; --c-rosa: #ee6fab; --c-weiss: #f7f7f7;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171a; --panel: #1f242a; --panel2: #2a3037; --line: #39414a;
+    --text: #eef1f4; --muted: #98a3ae; --accent: #4da3ff; --accent-ink: #06182e;
+    --yes: #2fb86a; --yes-ink: #04210f; --bad: #ff5a52; --bad-ink: #2a0503;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171a; --panel: #1f242a; --panel2: #2a3037; --line: #39414a;
+  --text: #eef1f4; --muted: #98a3ae; --accent: #4da3ff; --accent-ink: #06182e;
+  --yes: #2fb86a; --yes-ink: #04210f; --bad: #ff5a52; --bad-ink: #2a0503;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%; touch-action: manipulation;
+}
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+#app { max-width: 520px; margin: 0 auto; padding: 0 12px 24px; display: flex; flex-direction: column; gap: 10px; min-height: 100vh; }
+section { display: flex; flex-direction: column; gap: 10px; }
+
+/* sticky top: view tabs + stopwatch + order/variant */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  padding: 10px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+.bar1 { display: flex; gap: 8px; align-items: stretch; }
+.tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; background: var(--panel2); border-radius: 12px; padding: 3px; min-width: 0; }
+.tabs button { border-radius: 9px; min-height: 46px; font-weight: 700; font-size: 16px; color: var(--muted); }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+.stbtn { flex: 1; min-width: 0; min-height: 52px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
+  font-size: 21px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; text-align: left; }
+.stbtn small { font-size: 13px; font-weight: 600; opacity: .85; }
+.stbtn.empty { background: var(--panel); color: var(--text); border: 2px dashed var(--accent); }
+.orders.two { grid-template-columns: 1fr 1fr; }
+.orders.two .ord { min-height: 104px; text-align: center; }
+.orders.two .ord span { font-size: 14px; }
+.grid.one { grid-template-columns: 1fr; }
+.grid.one .tile { min-height: 96px; }
+.grid.one .tile .v { font-size: 42px; }
+.grid.solo .tile { min-height: 300px; }
+.grid.solo .tile .v { font-size: 84px; }
+.grid.solo .tile .lab { font-size: 18px; }
+.qopen { min-height: 56px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 18px; }
+.qback { min-height: 46px; border-radius: 10px; background: var(--panel2); font-weight: 700; font-size: 16px; }
+.doc { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.docpre { margin: 0; background: var(--panel2); border-radius: 10px; padding: 10px; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.docset { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+.docset label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.docset input { font: inherit; font-size: 16px; color: var(--text); background: var(--panel2); border: 2px solid var(--line); border-radius: 10px; min-height: 46px; padding: 0 10px; width: 100%; }
+.smsbtn { min-height: 58px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 18px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.cpbtn { min-height: 46px; border-radius: 10px; background: var(--panel2); font-weight: 600; }
+.docset2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button.smsbtn { width: 100%; }
+.swwrap { display: flex; gap: 6px; }
+.swbtn { min-width: 142px; min-height: 52px; border-radius: 12px; background: var(--panel); border: 2px solid var(--line);
+  font-size: 19px; font-weight: 700; padding: 0 12px; white-space: nowrap; }
+.swbtn.idle { font-family: inherit; font-size: 16px; color: var(--muted); }
+.swbtn.run { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.swbtn.stop { border-color: var(--accent); border-style: dashed; }
+.swreset { width: 46px; min-height: 52px; border-radius: 12px; background: var(--panel2); font-size: 22px; }
+.swreset:active { background: var(--accent); color: var(--accent-ink); }
+
+.head { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; }
+.sel { text-align: left; background: var(--panel); border: 2px solid var(--line); border-radius: 12px;
+  padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 70px; }
+.sel:active { border-color: var(--accent); }
+.sel .lab { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+.sel .lab i { font-style: normal; color: var(--accent); font-size: 12px; }
+.sel .val { font-size: 32px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; }
+.sel .val.empty { color: var(--muted); font-weight: 500; }
+.sel .sub { font-size: 12px; color: var(--muted); }
+#app.q .sel { min-height: 58px; }
+#app.q .sel .val { font-size: 24px; }
+#app.q .sel .sub { display: none; }
+
+.nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nav button { background: var(--panel2); border-radius: 10px; min-height: 44px; font-weight: 600; font-size: 15px; }
+.nav button:disabled { opacity: .35; }
+.nav button:not(:disabled):active { background: var(--accent); color: var(--accent-ink); }
+.also { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-height: 36px; }
+.chip { background: var(--panel2); color: var(--text); border-radius: 999px; padding: 7px 13px; font-weight: 600; }
+.chip:active { background: var(--accent); color: var(--accent-ink); }
+
+/* parts grid */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+.tile { border-radius: 12px; padding: 10px 12px 12px; min-height: 104px; display: flex; flex-direction: column; justify-content: space-between;
+  background: var(--panel); border: 2px solid var(--line); }
+.tile .lab { font-size: 14px; font-weight: 600; opacity: .8; }
+.tile .v { font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -0.5px; }
+.tile.wide { grid-column: 1 / -1; }
+.tile.yes { background: var(--yes); border-color: var(--yes); color: var(--yes-ink); }
+.tile.no { background: transparent; border-style: dashed; color: var(--muted); }
+.tile.no .v { font-weight: 600; font-size: 30px; }
+.tile.c-rot { background: var(--c-rot); border-color: var(--c-rot); color: #fff; }
+.tile.c-blau { background: var(--c-blau); border-color: var(--c-blau); color: #fff; }
+.tile.c-rosa { background: var(--c-rosa); border-color: var(--c-rosa); color: #2b0a1a; }
+.tile.c-weiss { background: var(--c-weiss); border-color: #d5d8dc; color: #14181c; }
+.placeholder { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 48px 16px; font-size: 17px; line-height: 1.4; }
+
+/* quality checklist */
+.qrow { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 10px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+.qrow.ok { border-color: var(--yes); }
+.qrow.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
+.qlab { font-size: 15px; font-weight: 700; padding-left: 2px; }
+.qopts { display: flex; gap: 8px; }
+.qopt { flex: 1; min-height: 54px; border-radius: 10px; background: var(--panel2); font-size: 17px; font-weight: 700; padding: 0 6px; border: 2px solid transparent; }
+.qopt.sel1 { background: var(--accent); color: var(--accent-ink); }
+.qopt.c-rot { background: var(--c-rot); color: #fff; }
+.qopt.c-blau { background: var(--c-blau); color: #fff; }
+.qopt.c-rosa { background: var(--c-rosa); color: #2b0a1a; }
+.qopt.c-weiss { background: var(--c-weiss); color: #14181c; border-color: #d5d8dc; }
+.qopt.sel1.c-rot, .qopt.sel1.c-blau, .qopt.sel1.c-rosa, .qopt.sel1.c-weiss { box-shadow: 0 0 0 3px var(--panel), 0 0 0 6px var(--accent); }
+.qopt.sel1::before { content: "✓ "; }
+.qchk { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 54px; text-align: left; font-size: 18px; font-weight: 700; }
+.qchk .box { flex: none; width: 32px; height: 32px; border-radius: 8px; border: 3px solid var(--muted); display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; color: transparent; }
+.qchk.on .box { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.numbtn { width: 100%; min-height: 54px; border-radius: 10px; background: var(--panel2); font-size: 24px; font-weight: 700; }
+.numbtn.empty { font-size: 16px; font-weight: 600; color: var(--muted); font-family: inherit; }
+.qhint { font-size: 13px; color: var(--muted); padding-left: 2px; }
+.qact { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; margin-top: 4px; }
+.qact button { min-height: 56px; border-radius: 12px; font-weight: 700; font-size: 17px; }
+.qact .go { background: var(--accent); color: var(--accent-ink); }
+.qact .go:disabled { background: var(--panel2); color: var(--muted); }
+.qact .rs { background: var(--panel2); }
+.res { border-radius: 14px; padding: 16px 14px; scroll-margin-top: 150px; display: flex; flex-direction: column; gap: 10px; }
+.res.ok { background: var(--yes); color: var(--yes-ink); }
+.res.bad { background: var(--bad); color: var(--bad-ink); }
+.res .big { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+.res .rw { font-size: 19px; font-weight: 700; }
+.res ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.res li { background: rgba(0,0,0,.16); border-radius: 10px; padding: 9px 10px; display: flex; gap: 10px; align-items: flex-start; font-size: 16px; line-height: 1.3; }
+:root[data-theme="dark"] .res li, :root:not([data-theme="light"]) .res li { background: rgba(0,0,0,.14); }
+.res .st { flex: none; background: var(--bad-ink); color: var(--bad); font-weight: 800; border-radius: 8px; padding: 2px 8px; font-size: 14px; white-space: nowrap; margin-top: 1px; }
+.res .note { font-size: 14px; opacity: .9; }
+
+/* overlays */
+.sheet { position: fixed; inset: 0; background: var(--bg); z-index: 10; display: none; flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.sheet.open { display: flex; }
+.sheet .bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; gap: 10px; max-width: 520px; width: 100%; margin: 0 auto; }
+.sheet h2 { margin: 0; font-size: 20px; }
+.sheet .x { background: var(--panel2); border-radius: 10px; min-width: 44px; min-height: 44px; font-size: 20px; }
+.sheet .body { flex: 1; overflow-y: auto; padding: 0 12px 20px; max-width: 520px; width: 100%; margin: 0 auto; }
+
+.orders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ord { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 10px 8px; min-height: 84px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.ord b { font-size: 30px; line-height: 1; }
+.ord span { font-size: 13px; color: var(--muted); }
+.ord.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.ord.on span { color: inherit; opacity: .85; }
+.ord:active { border-color: var(--accent); }
+
+.slots { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 0 14px; }
+.slot { min-width: 54px; min-height: 60px; border-radius: 10px; background: var(--panel); border: 2px solid var(--line);
+  font-size: 28px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 8px; }
+.slot.cur { border-color: var(--accent); }
+.slot.fill { background: var(--panel2); }
+.dash { font-size: 28px; color: var(--muted); }
+.steplab { text-align: center; color: var(--muted); font-size: 15px; margin-bottom: 12px; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.opts.three { grid-template-columns: 1fr 1fr 1fr; }
+.opt { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; min-height: 96px; padding: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.opt b { font-size: 40px; line-height: 1; }
+.opt span { font-size: 13px; color: var(--muted); text-align: center; }
+.opt:not(:disabled):active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.opt:not(:disabled):active span { color: inherit; }
+.opt:disabled { opacity: .28; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.row2 button { background: var(--panel2); border-radius: 10px; min-height: 48px; font-weight: 600; }
+.row2 button:disabled { opacity: .35; }
+
+.numdisp { background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; min-height: 84px; font-size: 52px; font-weight: 700;
+  display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; margin-bottom: 12px; }
+.numdisp.empty { color: var(--muted); font-weight: 500; font-size: 26px; font-family: inherit; }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.keys button { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; min-height: 72px; font-size: 32px; font-weight: 700; }
+.keys button:active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.numok { width: 100%; margin-top: 12px; min-height: 58px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 18px; }
+.numok:disabled { background: var(--panel2); color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <div class="bar1">
+      <button class="stbtn" id="selStation"></button>
+      <div class="swwrap">
+        <button class="swbtn" id="swBtn"></button>
+        <button class="swreset" id="swReset" aria-label="Stoppuhr zurücksetzen" hidden>↺</button>
+      </div>
+    </div>
+    <div class="head">
+      <button class="sel" id="selOrder"></button>
+      <button class="sel" id="selVar"></button>
+    </div>
+  </div>
+
+  <section id="vStation">
+    <div class="nav" id="nav">
+      <button id="prev">‹ Vorheriger Auftrag</button>
+      <button id="next">Nächster Auftrag ›</button>
+    </div>
+    <button class="qopen" id="qOpen" hidden>Quality-Checkliste öffnen ›</button>
+    <div class="also" id="also"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="vQuality" hidden>
+    <button class="qback" id="qBack">‹ Zurück zu Station 4</button>
+    <div id="qc"></div>
+  </section>
+</div>
+
+<div class="sheet" id="sheetStation">
+  <div class="bar"><h2>Station wählen</h2><button class="x" data-close aria-label="Schließen">✕</button></div>
+  <div class="body"><div class="orders two" id="stations"></div></div>
+</div>
+
+<div class="sheet" id="sheetOrder">
+  <div class="bar"><h2>Auftrag wählen</h2><button class="x" data-close aria-label="Schließen">✕</button></div>
+  <div class="body"><div class="orders" id="orders"></div></div>
+</div>
+
+<div class="sheet" id="sheetVar">
+  <div class="bar"><h2>Variante wählen</h2><button class="x" data-close aria-label="Schließen">✕</button></div>
+  <div class="body">
+    <div class="slots" id="slots"></div>
+    <div class="steplab" id="steplab"></div>
+    <div class="opts" id="opts"></div>
+    <div class="row2">
+      <button id="back">‹ Zurück</button>
+      <button id="reset">Zurücksetzen</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheetNum">
+  <div class="bar"><h2>Nummer Grundplatte</h2><button class="x" data-close aria-label="Schließen">✕</button></div>
+  <div class="body">
+    <div class="numdisp mono" id="numdisp"></div>
+    <div class="keys" id="keys"></div>
+    <button class="numok" id="numok">Übernehmen</button>
+  </div>
+</div>
+
+<script>
+/* ---------- DATA (aus den Fotos) ---------- */
+const ORDERS = [
+  ['0.7','R-12O24','04:20'], ['0.8','B-21S12','08:40'], ['0.9','S-21S24','13:00'],
+  ['1','R-12O24','17:20'],   ['2','B-21O12','21:40'],   ['3','S-21O12','26:00'],
+  ['4','R-22O24','30:20'],   ['5','B-22S12','34:40'],   ['6','R-11O24','39:00'],
+  ['7','B-21O12','43:20'],   ['8','S-22S12','47:40'],   ['9','B-21S24','52:00'],
+  ['10','S-21S12','56:20'],  ['11','B-22S24','60:40']
+].map(([no, art, zeit]) => ({ no, art, zeit }));
+
+// Typ R = Spoiler, Bumper, Wheelie | S = Spoiler, Bumper | B = nichts
+// 1. Ziffer: 1 = Karosserie rot, 2 = blau | 2. Ziffer: 1 = Federn rosa, 2 = weiß
+// S/O = Reifen slick/offroad | letzte Zahl = Batterie in V
+const VARIANTS = {};
+for (const t of ['R','S','B'])
+  for (const k of ['11','12','21','22'])
+    for (const r of ['S','O'])
+      for (const b of ['24','12']) {
+        if (t === 'R' && b !== '24') continue;
+        if (t === 'B' && k[0] !== '2') continue;
+        VARIANTS[`${t}-${k}${r}${b}`] = {
+          spoiler: t !== 'B', bumper: t !== 'B', wheelie: t === 'R',
+          karosserie: k[0] === '1' ? 'rot' : 'blau',
+          federn: k[1] === '1' ? 'rosa' : 'weiß',
+          reifen: r === 'S' ? 'slick' : 'offroad',
+          batterie: b + 'V'
+        };
+      }
+
+const PARTS = [
+  ['spoiler','Spoiler','bool'], ['bumper','Bumper','bool'],
+  ['wheelie','Wheelie','bool'],
+  ['karosserie','Karosserie','color'], ['federn','Federn','color'],
+  ['reifen','Reifen','text'], ['batterie','Batterie','text']
+];
+
+/* ---------- STATIONEN: was wird wo angezeigt ---------- */
+const ALL = ['spoiler','bumper','wheelie','karosserie','federn','reifen','batterie'];
+const STATIONS = {
+  1: { desc: 'Federn', parts: ['federn'], cols: 1 },
+  2: { desc: 'Federn', parts: ['federn'], cols: 1 },
+  3: { desc: 'Batterie · Reifen · Bumper · Wheelie · Karosserie · Spoiler', parts: ['batterie','reifen','bumper','wheelie','karosserie','spoiler'], cols: 1 },
+  4: { desc: 'Alle Teile + Quality-Checkliste', parts: ['federn','reifen','karosserie','spoiler','bumper','wheelie','batterie'], cols: 2, checklist: true }
+};
+
+/* ---------- QUALITY: Prüfpunkte + Rework-Stationen ---------- */
+// Station = Rework-Station bei Fehler. null = noch nicht festgelegt.
+const ST = { fed_v: 1, fed_h: 2, reifen: 4, rot: 4, kar: 4, spoiler: 4, bumper: 4, wheelie: 4, bat: 4, sich: 4, kabel: 4 };
+const JN = ['ja','nein'];
+const QC = [
+  { key:'fed_v',  label:'Federn Vorderachse', opts:['rosa','weiß'], color:true },
+  { key:'fed_h',  label:'Federn Hinterachse', opts:['rosa','weiß'], color:true },
+  { key:'reifen', label:'Reifenart', opts:['slick','offroad'] },
+  { key:'rot',    label:'Rotationsrichtung Reifen', opts:['richtig','falsch'], showIf: q => q.reifen === 'offroad' },
+  { key:'kar',    label:'Karosserie', opts:['rot','blau'], color:true },
+  { key:'spoiler',label:'Spoiler', opts:JN },
+  { key:'bumper', label:'Bumper', opts:JN },
+  { key:'wheelie',label:'Wheeliebar', opts:JN },
+  { key:'grund',  label:'Nummer Grundplatte', type:'num' },
+  { key:'bat',    label:'Batterie', opts:['12V','24V'] },
+  { key:'sich',   label:'Batteriesicherung', opts:['richtig rum','falsch rum'] },
+  { key:'kabel',  label:'Kabel gesteckt', opts:JN },
+  { key:'zub_a',  label:'2x Auftragsscheine', type:'check' },
+  { key:'zub_b',  label:'1x Anleitung', type:'check' },
+  { key:'zub_c',  label:'1x Fernbedienung', type:'check' }
+];
+const cc = v => 'c-' + (v === 'weiß' ? 'weiss' : v);
+
+/* ---------- STATE ---------- */
+let state = { order: null, variant: null, station: null, checklist: false, qIn: null, cfg: { mail: '', kz: 'CZ' }, qc: {}, done: false, sw: { acc: 0, start: null } };
+try { const s = JSON.parse(localStorage.getItem('station-hmi') || 'null'); if (s) Object.assign(state, s); } catch (e) {}
+if (state.order && !ORDERS.find(o => o.no === state.order)) state.order = null;
+if (state.variant && !VARIANTS[state.variant]) state.variant = null;
+state.cfg = Object.assign({ mail: '', kz: 'CZ' }, state.cfg);
+if (state.v !== 2) { state.v = 2; state.station = null; state.checklist = false; }  // Stationen neu nummeriert
+if (!STATIONS[state.station]) state.station = null;
+if (state.station !== 4) state.checklist = false;
+function save() { try { localStorage.setItem('station-hmi', JSON.stringify(state)); } catch (e) {} }
+
+const $ = id => document.getElementById(id);
+const orderObj = () => ORDERS.find(o => o.no === state.order);
+const newCar = () => { state.qc = {}; state.done = false; state.qIn = state.checklist ? fmt(swElapsed()) : null; };
+
+function pickOrder(no) { const o = ORDERS.find(x => x.no === no); state.order = o.no; state.variant = o.art; newCar(); save(); closeSheets(); render(); }
+function pickVariant(v) { state.order = null; state.variant = v; newCar(); save(); closeSheets(); render(); }
+
+/* ---------- STOPPUHR (gilt für beide Ansichten) ---------- */
+const swRunning = () => state.sw.start !== null;
+const swElapsed = () => state.sw.acc + (swRunning() ? Date.now() - state.sw.start : 0);
+function fmt(ms) {
+  const t = Math.floor(ms / 100), ds = t % 10, s = Math.floor(t / 10) % 60, m = Math.floor(t / 600) % 60, h = Math.floor(t / 36000);
+  const p = n => String(n).padStart(2, '0');
+  return (h ? h + ':' : '') + p(m) + ':' + p(s) + '.' + ds;
+}
+function renderSw() {
+  const b = $('swBtn'), el = swElapsed();
+  if (swRunning()) { b.className = 'swbtn mono run'; b.textContent = '■ ' + fmt(el); }
+  else if (el > 0) { b.className = 'swbtn mono stop'; b.textContent = '▶ ' + fmt(el); }
+  else { b.className = 'swbtn idle'; b.textContent = '▶ Stoppuhr'; }
+  $('swReset').hidden = swRunning() || el === 0;
+}
+$('swBtn').onclick = () => {
+  if (swRunning()) { state.sw = { acc: swElapsed(), start: null }; }
+  else { state.sw = { acc: state.sw.acc, start: Date.now() }; }
+  save(); renderSw();
+};
+$('swReset').onclick = () => { state.sw = { acc: 0, start: null }; save(); renderSw(); };
+setInterval(() => { if (swRunning()) renderSw(); }, 100);
+
+/* ---------- RENDER ---------- */
+function render() {
+  const q = state.station === 4 && state.checklist;
+  $('app').classList.toggle('q', q);
+  $('vStation').hidden = q; $('vQuality').hidden = !q;
+  const sb = $('selStation');
+  sb.className = 'stbtn' + (state.station ? '' : ' empty');
+  sb.innerHTML = state.station ? (state.checklist ? `<span>Quality</span><small>Station 4 ▾</small>` : `<span>Station ${state.station}</span><small>ändern ▾</small>`) : `<span>Station wählen</span><small>▾</small>`;
+  renderSw(); renderHead();
+  if (q) renderQuality(); else renderStation();
+}
+
+function renderHead() {
+  const o = orderObj();
+  $('selOrder').innerHTML = `<span class="lab">Auftrag <i>ändern</i></span>
+    <span class="val mono ${o ? '' : 'empty'}">${o ? o.no : '—'}</span>
+    <span class="sub">${o ? 'Fertig bei ' + o.zeit : ''}</span>`;
+  $('selVar').innerHTML = `<span class="lab">Variante <i>ändern</i></span>
+    <span class="val mono ${state.variant ? '' : 'empty'}">${state.variant || '—'}</span>
+    <span class="sub"></span>`;
+}
+
+function renderStation() {
+  $('qOpen').hidden = !(STATIONS[state.station] && STATIONS[state.station].checklist);
+  const o = orderObj();
+  const idx = o ? ORDERS.indexOf(o) : -1;
+  $('prev').disabled = idx <= 0;
+  $('next').disabled = idx < 0 || idx >= ORDERS.length - 1;
+  $('nav').style.display = o ? '' : 'none';
+
+  const also = $('also'); also.innerHTML = '';
+  if (state.variant) {
+    const list = ORDERS.filter(x => x.art === state.variant && x.no !== state.order);
+    if (!o && !list.length) also.textContent = 'Kein Auftrag mit dieser Variante in der Liste.';
+    else if (list.length) {
+      also.append(document.createTextNode(o ? 'Gleiche Variante auch in:' : 'Aufträge mit dieser Variante:'));
+      list.forEach(x => { const b = document.createElement('button'); b.className = 'chip mono'; b.textContent = x.no; b.onclick = () => pickOrder(x.no); also.append(b); });
+    }
+  }
+  const g = $('grid'); g.innerHTML = '';
+  const cfg = STATIONS[state.station];
+  g.className = 'grid' + (cfg && cfg.cols === 1 ? ' one' : '') + (cfg && cfg.parts.length === 1 ? ' solo' : '');
+  if (!cfg) { g.innerHTML = '<div class="placeholder">Oben deine Station antippen,<br>um die passenden Teile zu sehen.</div>'; return; }
+  if (!state.variant) { g.innerHTML = '<div class="placeholder">Auftrag oder Variante oben antippen,<br>um die Bauteile anzuzeigen.</div>'; return; }
+  const d = VARIANTS[state.variant];
+  cfg.parts.map(k => PARTS.find(x => x[0] === k)).forEach(([key, label, kind]) => {
+    const val = d[key]; const t = document.createElement('div');
+    let cls = 'tile', txt;
+    if (kind === 'bool') { cls += val ? ' yes' : ' no'; txt = val ? 'JA' : 'NEIN'; }
+    else if (kind === 'color') { cls += ' ' + cc(val); txt = val; }
+    else txt = val;
+    if (key === 'batterie' && cfg.cols === 2) cls += ' wide';
+    t.className = cls;
+    t.innerHTML = `<span class="lab">${label}</span><span class="v">${txt}</span>`;
+    g.append(t);
+  });
+}
+
+/* ---------- QUALITY ---------- */
+function visibleItems() { return QC.filter(it => !it.showIf || it.showIf(state.qc)); }
+const needed = it => it.key !== 'grund';  // Grundplatte wird nur notiert
+
+function evaluate() {
+  const d = VARIANTS[state.variant], q = state.qc, errs = [], notes = [];
+  const add = (key, text) => errs.push({ key, station: ST[key], text });
+  if (q.fed_v !== d.federn) add('fed_v', `Federn Vorderachse: ${q.fed_v} statt ${d.federn}`);
+  if (q.fed_h !== d.federn) add('fed_h', `Federn Hinterachse: ${q.fed_h} statt ${d.federn}`);
+  if (q.reifen !== d.reifen) add('reifen', `Reifenart: ${q.reifen} statt ${d.reifen}`);
+  if (q.reifen === 'offroad' && q.rot === 'falsch') add('rot', 'Reifen: Rotationsrichtung falsch');
+  if (q.kar !== d.karosserie) add('kar', `Karosserie: ${q.kar} statt ${d.karosserie}`);
+  [['spoiler','Spoiler'], ['bumper','Bumper'], ['wheelie','Wheeliebar']].forEach(([k, n]) => {
+    const has = q[k] === 'ja';
+    if (has && !d[k]) add(k, `${n}: darf nicht verbaut sein`);
+    if (!has && d[k]) add(k, `${n}: fehlt`);
+  });
+  if (q.bat !== d.batterie) add('bat', `Batterie: ${q.bat} statt ${d.batterie}`);
+  if (q.sich !== 'richtig rum') add('sich', 'Batteriesicherung: falsch rum');
+  if (q.kabel !== 'ja') add('kabel', 'Kabel nicht gesteckt');
+  errs.sort((a, b) => (a.station ?? 99) - (b.station ?? 99));
+  return { errs, notes };
+}
+
+function docData(res) {
+  const q = state.qc, o = orderObj(), bad = new Set(res.errs.map(e => e.key));
+  const st = (...k) => k.some(x => bad.has(x)) ? 'n.i.O.' : 'i.O.';
+  const vh = v => v === 'ja' ? 'vorhanden' : 'nicht vorhanden';
+  const fed = q.fed_v === q.fed_h ? q.fed_v : `vorne ${q.fed_v}, hinten ${q.fed_h}`;
+  return {
+    auf: o ? o.no : '-', variante: state.variant, ein: state.qIn || '-', grund: q.grund || '-', kz: state.cfg.kz || '-',
+    rows: [
+      ['Dämperfarbe', fed, st('fed_v', 'fed_h')],
+      ['Reifenart', q.reifen, st('reifen')],
+      ['Reifenausrichtung', '-', st('rot')],
+      ['Karosseriefarbe', q.kar, st('kar')],
+      ['Batteriespannung', q.bat, st('bat')],
+      ['Kabel clips', q.kabel === 'ja' ? 'gesteckt' : 'nicht gesteckt', st('kabel')],
+      ['Bumper', vh(q.bumper), st('bumper')],
+      ['Wheelie-Bar', vh(q.wheelie), st('wheelie')],
+      ['Spoiler', vh(q.spoiler), st('spoiler')],
+      ['Batteriesicherung', q.sich === 'richtig rum' ? 'korrekte Ausrichtung' : 'falsche Ausrichtung', st('sich')]
+    ]
+  };
+}
+const SIGN = 'dieses Dokument ist durch eine digitale Signatur ohne handschriftliche Unterschrift gültig';
+
+function buildDoc(res) {
+  const d = docData(res);
+  return [
+    'Traxxas Bandit', 'Quality Check List', '',
+    'Auftragsnummer: ' + d.auf, 'Variante: ' + d.variante, 'Eingangszeitpunkt: ' + d.ein, 'Nummer Grundplatte: ' + d.grund, '',
+    'Qualitätsmerkmal / Merkmalswert / Status',
+    ...d.rows.map(r => r.join(' / ')), '',
+    'Zubehör', '1x Anleitung', '1x Fernbedienung', '2x Auftragsschein', '',
+    'Mitarbeiter Kürzel: ' + d.kz,
+    'Mitarbeiter Unterschrift: ' + SIGN
+  ].join('\n');
+}
+
+/* ---- PDF selbst gebaut (A4, Helvetica) ---- */
+function pdfBuild(d) {
+  const esc = t => String(t).replace(/[^\x00-\xff]/g, '?').replace(/([\\()])/g, '\\$1');
+  let c = '';
+  const T = (x, y, size, txt, bold, rgb) => { c += `${rgb || '0 0 0'} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${y} Td (${esc(txt)}) Tj ET\n`; };
+  const Ln = (x1, y1, x2, y2, w) => { c += `${w || 0.8} w ${x1} ${y1} m ${x2} ${y2} l S\n`; };
+  c += '0 0 0 RG 1 w 40 118 515 712 re S\n';
+  T(50, 786, 22, 'Traxxas Bandit', true);
+  T(50, 762, 15, 'Quality Check List');
+  Ln(50, 750, 545, 750, 1);
+  [['Auftragsnummer:', d.auf], ['Variante:', d.variante], ['Eingangszeitpunkt:', d.ein], ['Nummer Grundplatte:', d.grund]]
+    .forEach(([k, v], i) => { T(50, 722 - i * 24, 12, k, true); T(210, 722 - i * 24, 12, v); });
+  Ln(50, 618, 545, 618, 1);
+  T(50, 600, 12, 'Qualitätsmerkmal', true); T(230, 600, 12, 'Merkmalswert', true); T(450, 600, 12, 'Status', true);
+  Ln(50, 590, 545, 590, 1);
+  d.rows.forEach((r, i) => {
+    const y = 566 - i * 28;
+    T(50, y, 12, r[0]); T(230, y, 12, r[1]);
+    T(450, y, 12, r[2], true, r[2] === 'i.O.' ? '0.11 0.54 0.29' : '0.81 0.18 0.14');
+    Ln(50, y - 10, 545, y - 10, 0.4);
+  });
+  T(50, 280, 12, 'Zubehör', true);
+  ['1x Anleitung', '1x Fernbedienung'].forEach((l, i) => T(50, 262 - i * 18, 12, l));
+  T(50, 226, 12, '2x Auftragsschein');
+  Ln(50, 210, 545, 210, 0.4);
+  T(50, 190, 12, 'Mitarbeiter Kürzel:', true); T(210, 190, 12, d.kz);
+  T(50, 162, 12, 'Mitarbeiter Unterschrift:', true);
+  const w = ['Dieses Dokument ist durch eine digitale Signatur', 'ohne handschriftliche Unterschrift gültig.'];
+  w.forEach((l, i) => T(50, 144 - i * 14, 10.5, l));
+
+  const o = [];
+  o[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  o[2] = '<< /Type /Pages /Kids [3 0 R] /Count 1 >>';
+  o[3] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>';
+  o[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  o[5] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  o[6] = `<< /Length ${c.length} >>\nstream\n${c}endstream`;
+  let out = '%PDF-1.4\n'; const off = [];
+  for (let i = 1; i <= 6; i++) { off[i] = out.length; out += `${i} 0 obj\n${o[i]}\nendobj\n`; }
+  const xr = out.length;
+  out += 'xref\n0 7\n0000000000 65535 f \n' + off.slice(1).map(n => String(n).padStart(10, '0') + ' 00000 n \n').join('') +
+         `trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
+  return Uint8Array.from(out, ch => ch.charCodeAt(0) & 255);
+}
+function pdfFile(res) {
+  const d = docData(res);
+  const name = ('QC_' + (d.auf !== '-' ? 'Auftrag-' + d.auf + '_' : '') + d.variante + '.pdf').replace(/[^\w.\-]/g, '_');
+  return new File([pdfBuild(d)], name, { type: 'application/pdf' });
+}
+function savePdf(f) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+function buildDocPanel(res) {
+  const el = document.createElement('div'); el.className = 'doc';
+  el.innerHTML = `<div class="qlab">Dokument (PDF) per E-Mail senden</div>
+    <pre class="docpre mono"></pre>
+    <div class="docset">
+      <label>Empfänger-E-Mail<input id="cfgMail" type="email" inputmode="email" autocapitalize="none" placeholder="name@beispiel.de"></label>
+      <label>Kürzel<input id="cfgKz" maxlength="4" autocapitalize="characters"></label>
+    </div>
+    <button class="smsbtn" id="pdfShare">PDF per E-Mail senden</button>
+    <div class="docset2"><button class="cpbtn" id="pdfSave">PDF speichern</button><button class="cpbtn" id="mailTxt">Mail-Entwurf (nur Text)</button></div>
+    <div class="qhint" id="docMsg">Im Teilen-Menü „Mail“ wählen, dann hängt das PDF als Anhang an. Die Adresse oben wird dabei nicht automatisch eingetragen (das erlaubt der Browser nicht), sie wird nur für den Mail-Entwurf genutzt.</div>`;
+  const $$ = s => el.querySelector(s);
+  const pre = $$('pre'), mail = $$('#cfgMail'), kz = $$('#cfgKz'), msg = $$('#docMsg');
+  mail.value = state.cfg.mail || ''; kz.value = state.cfg.kz || '';
+  const upd = () => { pre.textContent = buildDoc(res); };
+  mail.oninput = () => { state.cfg.mail = mail.value.trim(); save(); };
+  kz.oninput = () => { state.cfg.kz = kz.value.toUpperCase(); save(); upd(); };
+  const subject = () => { const d = docData(res); return `Quality Check List ${d.auf !== '-' ? 'Auftrag ' + d.auf + ' ' : ''}${d.variante}`; };
+  $$('#pdfShare').onclick = async () => {
+    const f = pdfFile(res);
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: subject(), text: subject() }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    savePdf(f);
+    msg.textContent = 'Teilen wird hier nicht unterstützt. Das PDF wurde gespeichert. Tippe jetzt auf „Mail-Entwurf“ und hänge die Datei an.';
+  };
+  $$('#pdfSave').onclick = () => { savePdf(pdfFile(res)); msg.textContent = 'PDF gespeichert.'; };
+  $$('#mailTxt').onclick = () => {
+    window.location.href = 'mailto:' + encodeURIComponent(state.cfg.mail || '') + '?subject=' + encodeURIComponent(subject()) + '&body=' + encodeURIComponent(buildDoc(res));
+  };
+  upd();
+  return el;
+}
+
+function renderQuality() {
+  const box = $('qc'); box.innerHTML = '';
+  box.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+  if (!state.variant) { box.innerHTML = '<div class="placeholder">Erst Auftrag oder Variante wählen,<br>dann kann das Fahrzeug geprüft werden.</div>'; return; }
+  const q = state.qc;
+  const res = state.done ? evaluate() : null;
+  const bad = res ? new Set(res.errs.map(e => e.key)) : new Set();
+
+  visibleItems().forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'qrow' + (res && needed(it) ? (bad.has(it.key) ? ' bad' : ' ok') : '');
+    let inner = it.type === 'check' ? '' : `<div class="qlab">${it.label}</div>`;
+    if (it.type === 'check') {
+      inner = `<button class="qchk ${q[it.key] ? 'on' : ''}" data-chk="${it.key}"><span class="box">✓</span><span>${it.label}</span></button>`;
+    } else if (it.type === 'num') {
+      inner += `<div class="qhint">Nur notieren, wird nicht geprüft.</div>`;
+      inner += `<button class="numbtn mono ${q.grund ? '' : 'empty'}" data-num>${q.grund || 'Nummer eingeben'}</button>`;
+    } else {
+      inner += '<div class="qopts">' + it.opts.map(v =>
+        `<button class="qopt ${it.color ? cc(v) : ''} ${q[it.key] === v ? 'sel1' : ''}" data-key="${it.key}" data-val="${v}">${v}</button>`).join('') + '</div>';
+    }
+    row.innerHTML = inner; box.append(row);
+  });
+
+  const missing = visibleItems().filter(it => needed(it) && !q[it.key]).length;
+  const act = document.createElement('div'); act.className = 'qact';
+  act.innerHTML = `<button class="go" id="qgo" ${missing ? 'disabled' : ''}>${missing ? 'Auswerten (' + missing + ' offen)' : 'Auswerten'}</button><button class="rs" id="qrs">Neu prüfen</button>`;
+  box.append(act);
+
+  if (res) {
+    const r = document.createElement('div'); r.id = 'result';
+    if (!res.errs.length) {
+      r.className = 'res ok'; r.innerHTML = `<div class="big">i.O.</div><div class="rw">Alle Punkte passen zur Variante.</div>` + res.notes.map(n => `<div class="note">${n}</div>`).join('');
+    } else {
+      const sts = [...new Set(res.errs.map(e => e.station))];
+      const stTxt = sts.map(s => s === null ? 'Station offen' : 'Station ' + s).join(' · ');
+      r.className = 'res bad';
+      r.innerHTML = `<div class="big">n.i.O.</div><div class="rw">Rework: ${stTxt}</div><ul>` +
+        res.errs.map(e => `<li><span class="st">${e.station === null ? 'Station ?' : 'Station ' + e.station}</span><span>${e.text}</span></li>`).join('') + '</ul>' +
+        res.notes.map(n => `<div class="note">${n}</div>`).join('');
+    }
+    box.append(r);
+    if (!res.errs.length) box.append(buildDocPanel(res));
+  }
+}
+
+$('qc').addEventListener('click', e => {
+  const chk = e.target.closest('[data-chk]');
+  if (chk) {
+    const k = chk.dataset.chk;
+    if (state.qc[k]) delete state.qc[k]; else state.qc[k] = true;
+    state.done = false; save(); renderQuality(); return;
+  }
+  const opt = e.target.closest('.qopt');
+  if (opt) {
+    const { key, val } = opt.dataset;
+    state.qc[key] = val;
+    if (key === 'reifen' && val !== 'offroad') delete state.qc.rot;
+    state.done = false; save(); renderQuality(); return;
+  }
+  if (e.target.closest('[data-num]')) { openNum(); return; }
+  if (e.target.closest('#qgo')) {
+    state.done = true; save(); renderQuality();
+    const r = $('result'); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (e.target.closest('#qrs')) { newCar(); save(); renderQuality(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+});
+
+/* ---------- NUMPAD ---------- */
+let numBuf = '';
+function renderNum() {
+  const d = $('numdisp');
+  d.textContent = numBuf || 'Nummer eingeben';
+  d.classList.toggle('empty', !numBuf);
+  $('numok').disabled = !numBuf || numBuf === '.';
+}
+function openNum() { numBuf = state.qc.grund || ''; renderNum(); $('sheetNum').classList.add('open'); }
+(function buildKeys() {
+  const k = $('keys');
+  ['1','2','3','4','5','6','7','8','9','.','0','⌫'].forEach(c => {
+    const b = document.createElement('button'); b.textContent = c; b.className = 'mono';
+    b.onclick = () => {
+      if (c === '⌫') numBuf = numBuf.slice(0, -1);
+      else if (c === '.') { if (!numBuf.includes('.')) numBuf = (numBuf || '0') + '.'; }
+      else if (numBuf.length < 6) numBuf += c;
+      renderNum();
+    };
+    k.append(b);
+  });
+})();
+$('numok').onclick = () => {
+  state.qc.grund = numBuf.endsWith('.') ? numBuf.slice(0, -1) : numBuf;
+  state.done = false; save(); closeSheets(); renderQuality();
+};
+
+/* ---------- ORDER SHEET ---------- */
+function renderOrders() {
+  const c = $('orders'); c.innerHTML = '';
+  ORDERS.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'ord' + (o.no === state.order ? ' on' : '');
+    b.innerHTML = `<b class="mono">${o.no}</b><span class="mono">${o.art}</span>`;
+    b.onclick = () => pickOrder(o.no);
+    c.append(b);
+  });
+}
+
+/* ---------- VARIANT SHEET ---------- */
+const STEPS = [
+  { name: 'Ausstattung wählen', opts: ['R','B','S'],
+    hint: o => ({ R: 'Spoiler, Bumper, Wheelie', S: 'Spoiler, Bumper', B: 'ohne Anbauteile' })[o] },
+  { name: 'Karosserie und Federn wählen', opts: ['11','12','21','22'],
+    hint: o => (o[0] === '1' ? 'rot' : 'blau') + ' · ' + (o[1] === '1' ? 'rosa' : 'weiß') },
+  { name: 'Reifen wählen', opts: ['O','S'], hint: o => o === 'O' ? 'offroad' : 'slick' },
+  { name: 'Batterie wählen', opts: ['24','12'], hint: o => o + 'V' }
+];
+let sel = [];
+const slice = (id, i) => [id[0], id.slice(2,4), id[4], id.slice(5)][i];
+const matches = (id, s) => s.every((x, i) => slice(id, i) === x);
+
+function renderVariant() {
+  const sl = $('slots'); sl.innerHTML = '';
+  const mk = i => {
+    const b = document.createElement('button');
+    b.className = 'slot mono' + (sel[i] ? ' fill' : '') + (i === sel.length ? ' cur' : '');
+    b.textContent = sel[i] || '·';
+    if (sel[i]) b.onclick = () => { sel = sel.slice(0, i); renderVariant(); };
+    return b;
+  };
+  sl.append(mk(0));
+  const d = document.createElement('span'); d.className = 'dash'; d.textContent = '–'; sl.append(d);
+  sl.append(mk(1), mk(2), mk(3));
+
+  const step = STEPS[sel.length];
+  $('steplab').textContent = step.name;
+  const o = $('opts'); o.innerHTML = '';
+  o.className = 'opts' + (step.opts.length === 3 ? ' three' : '');
+  step.opts.forEach(opt => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.disabled = !Object.keys(VARIANTS).some(id => matches(id, [...sel, opt]));
+    b.innerHTML = `<b class="mono">${opt}</b><span>${step.hint(opt)}</span>`;
+    b.onclick = () => {
+      sel.push(opt);
+      if (sel.length === 4) { const id = `${sel[0]}-${sel[1]}${sel[2]}${sel[3]}`; sel = []; pickVariant(id); }
+      else renderVariant();
+    };
+    o.append(b);
+  });
+  $('back').disabled = sel.length === 0;
+  $('reset').disabled = sel.length === 0;
+}
+
+/* ---------- WIRING ---------- */
+function closeSheets() { ['sheetOrder','sheetVar','sheetNum','sheetStation'].forEach(id => $(id).classList.remove('open')); }
+$('selOrder').onclick = () => { renderOrders(); $('sheetOrder').classList.add('open'); };
+$('selVar').onclick = () => { sel = []; renderVariant(); $('sheetVar').classList.add('open'); };
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
+function renderStations() {
+  const c = $('stations'); c.innerHTML = '';
+  Object.entries(STATIONS).forEach(([n, cf]) => {
+    const b = document.createElement('button');
+    const v = +n;
+    b.className = 'ord' + (v === state.station ? ' on' : '');
+    b.innerHTML = `<b class="mono">${n}</b><span>${cf.desc}</span>`;
+    b.onclick = () => { state.station = v; state.checklist = false; save(); closeSheets(); render(); window.scrollTo(0, 0); };
+    c.append(b);
+  });
+}
+$('qOpen').onclick = () => { if (!state.qIn || !Object.keys(state.qc).length) state.qIn = fmt(swElapsed()); state.checklist = true; save(); render(); window.scrollTo(0, 0); };
+$('qBack').onclick = () => { state.checklist = false; save(); render(); window.scrollTo(0, 0); };
+$('selStation').onclick = () => { renderStations(); $('sheetStation').classList.add('open'); };
+$('back').onclick = () => { sel.pop(); renderVariant(); };
+$('reset').onclick = () => { sel = []; renderVariant(); };
+$('prev').onclick = () => { const i = ORDERS.indexOf(orderObj()); if (i > 0) pickOrder(ORDERS[i-1].no); };
+$('next').onclick = () => { const i = ORDERS.indexOf(orderObj()); if (i >= 0 && i < ORDERS.length-1) pickOrder(ORDERS[i+1].no); };
+
+render();
+</script>
+</body>
+</html>
